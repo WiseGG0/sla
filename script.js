@@ -11,7 +11,7 @@ function initResource(name, index) {
     perSecond: 0,
     autoEnabled: false,
     interval: 20000,
-    upgrades: [0, 0, 0], // auto, perSecond, intervalReduce
+    upgrades: [0, 0, 0], // [upgrade de clique, perSecond, intervalo reduzido]
     unlocked: index === 0
   };
   updateResourceUI(name);
@@ -30,10 +30,10 @@ function updateResourceUI(name) {
     <h3>${name}</h3>
     <p>${name}s: <span id="count-${name}">${res.count.toFixed(0)}</span></p>
     <p>${name}/s: <span id="ps-${name}">${res.perSecond}</span></p>
-    <button onclick="mine('${name}')">Coletar ${name}</button><br>
-    <button onclick="buyUpgrade('${name}', 0)">Auto Gerador (Nv ${res.upgrades[0]}) - Custo: ${calcUpgradeCost(res.upgrades[0], 0)}</button>
-    <button onclick="buyUpgrade('${name}', 1)">+1/s (Nv ${res.upgrades[1]}) - Custo: ${calcUpgradeCost(res.upgrades[1], 1)}</button>
-    <button onclick="buyUpgrade('${name}', 2)">Reduzir tempo (Nv ${res.upgrades[2]}) - Custo: ${calcUpgradeCost(res.upgrades[2], 2)}</button>
+    <button onclick="mine('${name}')">Coletar ${name} (x${1 + res.upgrades[0] + prestige} por clique)</button><br>
+    <button onclick="buyUpgrade('${name}', 0)">Aumentar clique (Nv ${res.upgrades[0]}) - Custo: ${calcUpgradeCost(res.upgrades[0], 0)}</button>
+    <button onclick="buyUpgrade('${name}', 1)">+1/s automático (Nv ${res.upgrades[1]}) - Custo: ${calcUpgradeCost(res.upgrades[1], 1)}</button>
+    <button onclick="buyUpgrade('${name}', 2)">Reduzir tempo automático (Nv ${res.upgrades[2]}) - Custo: ${calcUpgradeCost(res.upgrades[2], 2)}</button>
   `;
   div.style.display = res.unlocked ? "block" : "none";
 }
@@ -44,7 +44,9 @@ function calcUpgradeCost(level, type) {
 }
 
 function mine(name) {
-  resources[name].count += 1 + prestige;
+  const res = resources[name];
+  const gain = 1 + res.upgrades[0] + prestige;
+  res.count += gain;
   checkUnlocks();
   updateResourceUI(name);
   saveGame();
@@ -56,9 +58,23 @@ function buyUpgrade(name, type) {
   if (res.count >= cost) {
     res.count -= cost;
     res.upgrades[type]++;
-    if (type === 0 && !res.autoEnabled) startAutoProduction(name);
-    if (type === 1) res.perSecond++;
-    if (type === 2) res.interval = Math.max(1000, res.interval - 1000);
+    if (type === 1) {
+      // Upgrade automático +1/s
+      res.perSecond++;
+      if (!res.autoEnabled) startAutoProduction(name);
+    }
+    if (type === 2) {
+      // Reduz intervalo de produção automática
+      res.interval = Math.max(1000, res.interval - 1000);
+      if (res.autoEnabled) {
+        clearInterval(autoIntervals[name]);
+        autoIntervals[name] = setInterval(() => {
+          res.count += 1 + prestige;
+          updateResourceUI(name);
+          saveGame();
+        }, res.interval);
+      }
+    }
     updateResourceUI(name);
     saveGame();
   }
@@ -88,7 +104,8 @@ function checkUnlocks() {
 
 function updatePerSecond() {
   materials.forEach(name => {
-    resources[name].count += resources[name].perSecond;
+    const res = resources[name];
+    res.count += res.perSecond;
     updateResourceUI(name);
   });
   saveGame();
